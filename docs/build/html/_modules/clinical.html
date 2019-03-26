@@ -1,0 +1,206 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>clinical &#8212; functions 1.0 documentation</title>
+    <link rel="stylesheet" href="../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">functions 1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Module code</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for clinical</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: clinical</span>
+<span class="sd">    :platform: Ubuntu 14.04.5 LTS Python 2.7.10 Pyspark 2.2.0.cloudera2</span>
+<span class="sd">    :synopsis: Functions to facilitate working with ICD codes. Looks up ICD9 to ICD 10 table clincodes.icd9_10_desc</span>
+
+<span class="sd">.. moduleauthor:: Yen Low (put name down for initial traceability; we&#39;ll eventually reorganize into Pirates)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span> <span class="nn">pyspark.sql</span> <span class="k">import</span> <span class="n">SparkSession</span>
+<span class="kn">from</span> <span class="nn">pyspark.sql.functions</span> <span class="k">import</span> <span class="n">col</span>
+
+<span class="n">spark</span> <span class="o">=</span> <span class="n">SparkSession</span><span class="o">.</span><span class="n">builder</span>\
+            <span class="o">.</span><span class="n">enableHiveSupport</span><span class="p">()</span>\
+            <span class="o">.</span><span class="n">getOrCreate</span><span class="p">()</span>
+
+<span class="c1"># To load ICD csv to hive table (if needed)</span>
+<span class="c1"># Table from 2018 CMS GEM</span>
+<span class="c1"># ref ~/gem/load_icd9_10_desc.py</span>
+<span class="c1"># https://github.com/AtlasCUMC/ICD10-ICD9-codes-conversion</span>
+<span class="c1">#</span>
+<span class="c1"># from pyspark.sql import HiveContext</span>
+<span class="c1">#</span>
+<span class="c1"># hdfs:///home/yensia.low/ICD9_10_desc.csv</span>
+<span class="c1"># df = spark.read.csv(&#39;ICD9_10_desc.csv&#39;,sep=&quot;|&quot;,header=True)</span>
+<span class="c1"># df.show(3,truncate=False)</span>
+<span class="c1"># df.printSchema()</span>
+<span class="c1"># df.write.saveAsTable(&quot;yen.ICD9_10_desc&quot;,mode=&quot;overwrite&quot;, format=&quot;orc&quot;)</span>
+<span class="c1">#</span>
+<span class="c1"># #Test that csv is loaded into table</span>
+<span class="c1"># tmp=sqlContext.sql(&#39;select icd9 from clincodes.icd9_10_desc where icd9 between 721 and 724&#39;)</span>
+<span class="c1"># tmp.show()</span>
+
+<span class="c1">#df_icd=spark.table(&#39;clincodes.icd9_10_desc&#39;)  #where the ICD table is</span>
+
+<div class="viewcode-block" id="ICDbetween"><a class="viewcode-back" href="../index.html#clinical.ICDbetween">[docs]</a><span class="k">def</span> <span class="nf">ICDbetween</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="n">end</span><span class="p">,</span> <span class="n">regexmask</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">icd</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nshow</span><span class="o">=</span><span class="mi">20</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extracts all the ICD (9 or 10) codes between start and end.</span>
+<span class="sd">    Based on static ICD9 to 10 table from CMS GEM in 2018</span>
+<span class="sd">    https://www.cms.gov/Medicare/Coding/ICD10/2018-ICD-10-CM-and-GEMs.html</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        start (float, int or str): starting ICD number. Ignored if regex is specified</span>
+<span class="sd">        end (float, int or str): ending ICD number. Ignored if regex is specified</span>
+<span class="sd">        regexmask: regular expression to match to</span>
+<span class="sd">        icd (int): ICD system (9 or 10). Defaults to 10 otherwise</span>
+<span class="sd">        verbose (boolean): prints ICD table if True (default)</span>
+<span class="sd">        nshow (int): number of records to show. Defaults to 20</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        unique list of ICD codes (str) between start and end</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        &gt;&gt;&gt; ICDbetween(3.0,3.09, icd=9, verbose=True, nshow=20)</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+<span class="sd">        |icd9 |icd10|description         |</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+<span class="sd">        |003.0|A02.0|Salmonella enteritis|</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+
+<span class="sd">        &gt;&gt;&gt; ICDbetween(start=None,end=None,regexmask=&#39;^E00[0-2]&#39;,icd=9,verbose=False, nshow=20)</span>
+<span class="sd">        [&#39;E000.0&#39;, &#39;E000.1&#39;, &#39;E000.2&#39;, &#39;E000.8&#39;, &#39;E000.9&#39;, &#39;E001.0&#39;, &#39;E001.1&#39;, &#39;E002.0&#39;, &#39;E002.1&#39;, &#39;E002.2&#39;, &#39;E002.3&#39; &#39;E002.4&#39;, &#39;E002.5&#39;, &#39;E002.6&#39;, &#39;E002.7&#39;, &#39;E002.8&#39;, &#39;E002.9&#39;]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">df_icd</span>
+
+    <span class="c1">#set ICD system</span>
+    <span class="k">if</span> <span class="n">icd</span><span class="o">==</span><span class="mi">9</span><span class="p">:</span>
+        <span class="n">colmn</span><span class="o">=</span><span class="s1">&#39;icd9&#39;</span>
+    <span class="k">elif</span> <span class="n">icd</span><span class="o">==</span><span class="mi">10</span><span class="p">:</span>
+        <span class="n">colmn</span> <span class="o">=</span> <span class="s1">&#39;icd10&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="nb">print</span> <span class="s2">&quot;icd should be 9 or 10. Defaults to 10 otherwise&quot;</span>
+        <span class="n">colmn</span> <span class="o">=</span> <span class="s1">&#39;icd10&#39;</span>
+
+    <span class="c1">#get selected ICDs</span>
+    <span class="k">if</span> <span class="n">regexmask</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="n">df_icd</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="n">colmn</span><span class="p">)</span><span class="o">.</span><span class="n">between</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">selected</span> <span class="o">=</span> <span class="n">df_icd</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="n">colmn</span><span class="p">)</span><span class="o">.</span><span class="n">rlike</span><span class="p">(</span><span class="n">regexmask</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
+        <span class="n">selected</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">nshow</span><span class="p">,</span> <span class="n">truncate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="n">codes</span><span class="o">=</span><span class="n">selected</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">colmn</span><span class="p">)</span><span class="o">.</span><span class="n">sort</span><span class="p">(</span><span class="n">colmn</span><span class="p">)</span><span class="o">.</span><span class="n">rdd</span><span class="o">.</span><span class="n">flatMap</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">collect</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">x</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">codes</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="ICDexpand"><a class="viewcode-back" href="../index.html#clinical.ICDexpand">[docs]</a><span class="k">def</span> <span class="nf">ICDexpand</span><span class="p">(</span><span class="n">number</span><span class="p">,</span> <span class="n">icd</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">nshow</span><span class="o">=</span><span class="mi">20</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Get all child ICD codes under given parent code. Calls a modified version of ICDbetween()</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        number (float or int): parent code</span>
+<span class="sd">        icd (int): ICD system (9 or 10). Defaults to 10 otherwise</span>
+<span class="sd">        verbose (boolean): prints ICD table if True (default(</span>
+<span class="sd">        nshow (int): number of records to show. Defaults to 20</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        unique list of ICD codes (str) expanded from input number</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; ICDexpand(3.0,icd=9)</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+<span class="sd">        |icd9 |icd10|description         |</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+<span class="sd">        |003.0|A02.0|Salmonella enteritis|</span>
+<span class="sd">        +-----+-----+--------------------+</span>
+<span class="sd">        [&#39;003.0&#39;]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">df_icd</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">number_int</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">number</span><span class="p">))</span>
+        <span class="n">dp</span><span class="o">=</span><span class="mi">0</span>
+        <span class="n">codes</span> <span class="o">=</span> <span class="n">ICDbetween</span><span class="p">(</span><span class="n">number_int</span><span class="p">,</span> <span class="n">number_int</span><span class="o">+</span><span class="mi">1</span><span class="o">-</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">icd</span><span class="o">=</span><span class="n">icd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">nshow</span><span class="o">=</span><span class="n">nshow</span><span class="p">)</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">dp</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">number</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">dp</span><span class="o">==</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">codes</span> <span class="o">=</span> <span class="n">ICDbetween</span><span class="p">(</span><span class="n">number</span><span class="p">,</span> <span class="n">number</span><span class="o">+</span><span class="mi">10</span><span class="o">**</span><span class="p">(</span><span class="o">-</span><span class="n">dp</span><span class="p">)</span><span class="o">-</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">icd</span><span class="o">=</span><span class="n">icd</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="n">nshow</span><span class="o">=</span><span class="n">nshow</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">dp</span><span class="o">==</span><span class="mi">2</span><span class="p">:</span>
+            <span class="n">codes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">number</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;ICD code must have between 0 and 2 decimal places&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">codes</span></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">functions 1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >Module code</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019, Pirates.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
+    </div>
+  </body>
+</html>

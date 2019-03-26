@@ -1,0 +1,229 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>sparkagg &#8212; functions 1.0 documentation</title>
+    <link rel="stylesheet" href="../_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">functions 1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Module code</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for sparkagg</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">.. module:: sparkagg</span>
+<span class="sd">    :platform: Ubuntu 14.04.5 LTS Python 2.7.10 Pyspark 2.2.0.cloudera2</span>
+<span class="sd">    :synopsis: Pyspark functions for aggregating, filtering by regex, arrays</span>
+
+<span class="sd">.. moduleauthor:: Yen Low (put name down for initial traceability; we&#39;ll eventually reorganize into Pirates)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="kn">from</span> <span class="nn">pyspark.sql.types</span> <span class="k">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">pyspark.sql.functions</span> <span class="k">import</span> <span class="o">*</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.max_colwidth&#39;</span><span class="p">,</span><span class="mi">500</span><span class="p">)</span>
+<span class="n">pd</span><span class="o">.</span><span class="n">set_option</span><span class="p">(</span><span class="s1">&#39;display.max_columns&#39;</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="group_pct"><a class="viewcode-back" href="../index.html#sparkagg.group_pct">[docs]</a><span class="k">def</span> <span class="nf">group_pct</span><span class="p">(</span><span class="n">tot</span><span class="p">,</span> <span class="n">x</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">,</span> <span class="n">pct</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return proportions or percentages after a groupby operation</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        tot (int): denominator for computing proportions, e.g. df.counts()</span>
+<span class="sd">        x (str): name of column to be counted. Defaults to &#39;*&#39; for row counts</span>
+<span class="sd">        pct (boolean): flag for proportions (False, default) or percentage (True)</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        float: proportion or percentages</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; df.groupby(&#39;group&#39;).agg(group_pct(tot, &#39;*&#39;).alias(&#39;pct&#39;)).sort(&#39;pct&#39;,ascending=False).show()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">pct</span><span class="p">:</span>
+        <span class="n">factor</span><span class="o">=</span><span class="mf">100.0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">factor</span><span class="o">=</span><span class="mf">1.0</span>
+    <span class="c1">#Need factor to be float to ensure answer is also float</span>
+    <span class="c1">#Do not change order of operations to output float answers</span>
+    <span class="k">return</span> <span class="n">factor</span><span class="o">*</span><span class="n">count</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="n">tot</span></div>
+
+
+<div class="viewcode-block" id="array_rlike"><a class="viewcode-back" href="../index.html#sparkagg.array_rlike">[docs]</a><span class="k">def</span> <span class="nf">array_rlike</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">arrayColname</span><span class="p">,</span> <span class="n">selDistinctCol</span><span class="p">,</span> <span class="n">regexmask</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    if array column matches regex, return pyspark dataframe with corresponding selDistinctCol columns (e.g. instanceId)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        df: pyspark dataframe with the array of interest</span>
+<span class="sd">        arrayColname (str): array name</span>
+<span class="sd">        selDistinctCol (str): name of columns to return. Performs a &#39;select distinct&#39; on these columns (e.g. instanceId)</span>
+<span class="sd">        regexmask: regular expression to match on</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        pyspark dataframe with only selDistinctCol columns</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; array_rlike(df, &#39;medicalCodes.code&#39;, &#39;instanceId&#39;, &#39;^E900&#39;).collect()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1">#ensure selDistinctCol is a list</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">selDistinctCol</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,)):</span>
+        <span class="n">selDistinctCol</span> <span class="o">=</span> <span class="p">[</span><span class="n">selDistinctCol</span><span class="p">]</span>
+
+    <span class="n">arrayParentName</span><span class="o">=</span><span class="n">arrayColname</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">selColumns</span> <span class="o">=</span> <span class="n">selDistinctCol</span> <span class="o">+</span> <span class="p">[</span><span class="n">arrayParentName</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">selColumns</span><span class="p">)</span><span class="o">.</span>\
+            <span class="n">withColumn</span><span class="p">(</span><span class="s1">&#39;exploded&#39;</span><span class="p">,</span><span class="n">explode</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="n">arrayColname</span><span class="p">]))</span><span class="o">.</span>\
+            <span class="n">where</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="s1">&#39;exploded&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">rlike</span><span class="p">(</span><span class="n">regexmask</span><span class="p">))</span><span class="o">.</span>\
+            <span class="n">select</span><span class="p">(</span><span class="n">selDistinctCol</span><span class="p">)</span><span class="o">.</span><span class="n">distinct</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="array_contains_any"><a class="viewcode-back" href="../index.html#sparkagg.array_contains_any">[docs]</a><span class="k">def</span> <span class="nf">array_contains_any</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">ilist</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    True/False if array column contains *any* of items in ilist</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        array: pyspark array or nested element</span>
+<span class="sd">        ilist: list with at least one value (either all str or all numeric) that array must match on. If single element, must be in a list, e.g. [&#39;match_pattern&#39;] or [1]</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        boolean: True/False pyspark indices</span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; df.where(array_contains_any(df.medicalCodes.code, [&quot;E900.0&quot;,&quot;V67.59&quot;]))</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">list_of_filtered_rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">array_contains</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">ilist</span><span class="p">]</span> <span class="c1">#pyspark column pointers</span>
+    <span class="c1">#items of list are concatenated by | (i.e. OR) operator</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">|</span> <span class="n">j</span><span class="p">,</span> <span class="n">list_of_filtered_rows</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="array_contains_all"><a class="viewcode-back" href="../index.html#sparkagg.array_contains_all">[docs]</a><span class="k">def</span> <span class="nf">array_contains_all</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">ilist</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    True/False if array column contains *all* the items in ilist</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        array: pyspark array or nested element</span>
+<span class="sd">        ilist: list of values (either all str or all numeric) that array must match all on. If single element, must be in a list, e.g. [&#39;match_pattern&#39;] or [1]</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        boolean: True/False pyspark indices</span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; df.where(array_contains_all(df.medicalCodes.code, [&quot;E900.0&quot;,&quot;V67.59&quot;]))</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">list_of_filtered_rows</span> <span class="o">=</span> <span class="p">[</span><span class="n">array_contains</span><span class="p">(</span><span class="n">array</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">ilist</span><span class="p">]</span> <span class="c1">#pyspark column pointers</span>
+    <span class="c1">#items of list are concatenated by | (i.e. OR) operator</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="k">lambda</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">:</span> <span class="n">i</span> <span class="o">&amp;</span> <span class="n">j</span><span class="p">,</span> <span class="n">list_of_filtered_rows</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="countDistinctWhen"><a class="viewcode-back" href="../index.html#sparkagg.countDistinctWhen">[docs]</a><span class="k">def</span> <span class="nf">countDistinctWhen</span><span class="p">(</span><span class="n">colCondition</span><span class="p">,</span> <span class="n">conditionvalue</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">elsevalue</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">colDistinct</span><span class="o">=</span><span class="s1">&#39;userId&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Equivalent of count(distinct case when colCondition==conditionvalue then colDistinct else elsevalue end)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        colCondition (str): name of column which condition is applied, e.g. &#39;group&#39;</span>
+<span class="sd">        conditionvalue (float, int or str): Value that colCondition must be equal to, e.g. 1 for group==1</span>
+<span class="sd">        elsevalue (float, int, str or None): Value to return when colCondition!=conditionvalue (default: None)</span>
+<span class="sd">        colDistinct (str): name of column with value returned when condition is True (e.g. &#39;id&#39;)</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        int: count of distinct values in colDistinct column when colCondition==conditionvalue</span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; df.agg(countDistinctWhen(&#39;engage_flag&#39;,colDistinct=&#39;userId&#39;)).show()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">countDistinct</span><span class="p">(</span><span class="n">when</span><span class="p">(</span><span class="n">col</span><span class="p">(</span><span class="n">colCondition</span><span class="p">)</span><span class="o">==</span><span class="n">conditionvalue</span><span class="p">,</span> <span class="n">col</span><span class="p">(</span><span class="n">colDistinct</span><span class="p">))</span><span class="o">.</span><span class="n">otherwise</span><span class="p">(</span><span class="n">elsevalue</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="cnt2pct"><a class="viewcode-back" href="../index.html#sparkagg.cnt2pct">[docs]</a><span class="k">def</span> <span class="nf">cnt2pct</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="n">colSelected</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">denominator</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span><span class="n">pct</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Converts pyspark dataframe of counts to percentages</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        df: input dataframe where each cell is a count</span>
+<span class="sd">        colSelected: (list of) column names of dataframe where counts will be converted to percentages</span>
+<span class="sd">        denominator (int or None): denominator over which counts will be divided</span>
+<span class="sd">        pct (boolean): flag for proportions (False) or percentage (True). Defaults to True</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        pyspark dataframe of proportion or percentages</span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; cnt2pct(df, [&#39;count1&#39;,&#39;count2&#39;])).show()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">pct</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">factor</span><span class="o">=</span><span class="mf">100.0</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">factor</span><span class="o">=</span><span class="mf">1.0</span>
+    <span class="k">if</span> <span class="n">colSelected</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">colSelected</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span>
+    <span class="k">if</span> <span class="n">denominator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">denominator</span><span class="o">=</span><span class="n">df</span><span class="o">.</span><span class="n">count</span><span class="p">()</span>
+    <span class="c1">#TODO: or should denominator be sum of all counts?</span>
+    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">colSelected</span><span class="p">)</span><span class="o">.</span>\
+              <span class="n">select</span><span class="p">(</span><span class="o">*</span><span class="p">((</span><span class="n">col</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">*</span><span class="n">factor</span><span class="o">/</span><span class="n">denominator</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">colSelected</span><span class="p">))</span></div>
+
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">functions 1.0 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >Module code</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019, Pirates.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
+    </div>
+  </body>
+</html>
